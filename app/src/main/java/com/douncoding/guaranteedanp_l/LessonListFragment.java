@@ -1,6 +1,7 @@
 package com.douncoding.guaranteedanp_l;
 
 import android.content.Context;
+import android.os.AsyncTask;
 import android.os.Bundle;
 import android.support.v4.app.Fragment;
 import android.support.v7.widget.LinearLayoutManager;
@@ -17,10 +18,13 @@ import android.widget.TextView;
 import com.douncoding.dao.*;
 import com.douncoding.dao.LessonTime;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 
 public class LessonListFragment extends Fragment {
@@ -31,9 +35,14 @@ public class LessonListFragment extends Fragment {
     RecyclerView mLessonListView;
     LinearLayoutManager mLayoutManager;
     LessonListAdapter mAdapter;
-    ArrayList<Lesson> mTodayLessons = new ArrayList<>();
+
+    // 오늘의 강의목록
+    //ArrayList<Lesson> mTodayLessons = new ArrayList<>();
+    HashMap<Lesson, Integer> mTodayLessons;
 
     AppContext mApp;
+    WebService mWebService;
+
     PlaceDao mPlaceDao;
 
     public LessonListFragment() { }
@@ -50,6 +59,10 @@ public class LessonListFragment extends Fragment {
         super.onCreate(savedInstanceState);
 
         mPlaceDao = mApp.openDBReadable().getPlaceDao();
+
+        mWebService = mApp.getWebServiceInstance();
+
+        mTodayLessons = new HashMap<>();
     }
 
     @Override
@@ -96,16 +109,76 @@ public class LessonListFragment extends Fragment {
         super.onResume();
 
         List<Lesson> lessons = loadOwnLessons();
+        // 오늘의 강의목록 구성
         for (Lesson lesson : lessons) {
             for (LessonTime time: lesson.getLessonTimeList()) {
                 if (isValidateLessonTime(time)) {
-                    mTodayLessons.add(lesson);
+                    //mTodayLessons.add(lesson);
+                    mTodayLessons.put(lesson, 0);
                 }
             }
         }
 
+        loadData();
+
         mAdapter.addItem(lessons);
     }
+
+    private void loadData() {
+        new AsyncTask<Void, String, Void>() {
+            @Override
+            protected Void doInBackground(Void... params) {
+                for (Map.Entry<Lesson, Integer> entry : mTodayLessons.entrySet()) {
+                    Lesson lesson = entry.getKey();
+
+                    int lessonId = lesson.getId().intValue();
+                    int todayAttendCount = 0;
+                    try {
+                        // 수강생 목록 구함
+                        List<Student> mStudents =
+                                mWebService.getStudentsOfLesson(lessonId).execute().body();
+
+                        // 수강생별 출석부를 구함
+                        for (Student student : mStudents) {
+                            int studentId = student.getId().intValue();
+
+                            // 출석현황
+                            List<Attendance> attendances = mWebService.getAttendancesOfStudent(
+                                    studentId, lessonId).execute().body();
+
+                            // 오늘 날짜에 해당하는 출석기록만 구함
+                            for (Attendance item: attendances) {
+                                Calendar tc = Calendar.getInstance();
+                                Calendar ec = Calendar.getInstance();
+                                ec.setTime(item.getEnterTime());
+
+                                if (tc.get(Calendar.DAY_OF_MONTH) == ec.get(Calendar.DAY_OF_MONTH)) {
+                                    // 지각 또는 출석
+                                    if (item.getState() != 0) {
+                                        todayAttendCount++;
+                                    }
+                                }
+                            }
+                        } // for
+
+                        Log.i(TAG, lesson.getName() +" 출석인원:" + todayAttendCount);
+                        mTodayLessons.put(lesson, todayAttendCount);
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                } // for
+                return null;
+            }
+
+            @Override
+            protected void onPostExecute(Void aVoid) {
+                super.onPostExecute(aVoid);
+                mAdapter.notifyDataSetChanged();
+            }
+        }.execute();
+    }
+
+
 
     private List<Lesson> loadOwnLessons() {
         Instructor own = mApp.내정보.얻기();
@@ -175,8 +248,12 @@ public class LessonListFragment extends Fragment {
             Lesson item = mDataset.get(position);
 
             boolean todayLesson = false;
+            int attendCount = 0;
 
-            for (Lesson lesson : mTodayLessons) {
+            //for (Lesson lesson : mTodayLessons) {
+            for (Map.Entry<Lesson, Integer> entry : mTodayLessons.entrySet()) {
+                Lesson lesson = entry.getKey();
+                attendCount = entry.getValue();
                 if (lesson.getId().equals(item.getId())) {
                     todayLesson = true;
                     break;
@@ -198,10 +275,15 @@ public class LessonListFragment extends Fragment {
                 builder.append(" ");
             }
 
+            // 기본정보
             holder.mNameText.setText(item.getName());
             holder.mPersonnelText.setText(String.valueOf(item.getPersonnel()));
             holder.mRoomText.setText(mPlaceDao.load(item.getPid()).getName());
             holder.mSubText.setText(builder.toString());
+
+            // 출석정보
+            holder.mASCountText.setText(String.valueOf(item.getPersonnel() - attendCount));
+            holder.mATCountText.setText(String.valueOf(attendCount));
         }
 
         @Override

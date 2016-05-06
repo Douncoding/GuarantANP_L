@@ -101,5 +101,15 @@ public interface WebService {
      * 학생 출석목록 조회
      */
     @GET("/attendances/student/{sid}/lesson/{lid}")
-    Call<List<Attendance>> getAttendancesOfStudent(@Path("sid") int studentId, @Path("lid") int lessonId);
+    Call<List<Attendance>> getAttendancesOfStudent(
+            @Path("sid") int studentId,
+            @Path("lid") int lessonId);
+
+    /**
+     * 강의일자의 출석현황
+     * @param lessonTimeId 강의일자 (강의번호가 꼭 포함되어야 함)
+     * @return
+     */
+    @GET("/attendances/lessontime/{ltid}")
+    Call<List<Integer>> getAttendDaysOfLessonTime(@Path("ltid") int lessonTimeId);
 }

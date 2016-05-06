@@ -167,7 +167,6 @@ public class AttendanceFragment extends Fragment implements
     }
 
     private void loadData() {
-
         new AsyncTask<Void, String, Void>() {
             @Override
             protected Void doInBackground(Void... params) {
@@ -178,11 +177,10 @@ public class AttendanceFragment extends Fragment implements
 
                     for (Student student : mStudents) {
                         int studentId = student.getId().intValue();
-
                         List<Attendance> attendances = mWebService.getAttendancesOfStudent(
                                 studentId, lessonId).execute().body();
-                        mAttendanceMap.put(student.getId(), attendances);
 
+                        mAttendanceMap.put(student.getId(), attendances);
                     }
                 } catch (IOException e) {
                     e.printStackTrace();
@@ -248,12 +246,13 @@ public class AttendanceFragment extends Fragment implements
         if (list == null || list.size() == 0)
             return 0;
 
+        // 지각도 출석으로 인정한다.
         for (Attendance item : list) {
             switch (item.getState()) {
-                case 0:
-
+                case 1: // 출석
+                    attendDay++;
                     break;
-                case 1:
+                case 2: // 지각
                     attendDay++;
                     break;
             }

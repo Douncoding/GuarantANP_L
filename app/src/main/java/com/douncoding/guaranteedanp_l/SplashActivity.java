@@ -1,13 +1,18 @@
 package com.douncoding.guaranteedanp_l;
 
+import android.content.DialogInterface;
 import android.os.AsyncTask;
 import android.os.Handler;
+import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 
 import android.app.ProgressDialog;
 import android.content.Intent;
 import android.util.Log;
+import android.view.View;
+import android.widget.EditText;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import com.douncoding.dao.Instructor;
@@ -48,30 +53,56 @@ public class SplashActivity extends AppCompatActivity implements
     WebService mWebService;
     AppContext mApp;
 
+    TextView mHideOption;
+    public int optionCount;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_splash);
 
-        Retrofit retrofit = new Retrofit.Builder()
-                .baseUrl(Constants.HOST)
-                .addConverterFactory(GsonConverterFactory.create())
-                .build();
+        mHideOption = (TextView)findViewById(R.id.hide_option);
+        mHideOption.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (optionCount++ > 5) {
+                    showHideOptionDialog();
+                }
+            }
+        });
 
-        mWebService = retrofit.create(WebService.class);
+
         mApp = (AppContext)getApplicationContext();
 
-        // 내부 모든 테이블 초기화 - 재시작 시점에 재구성
-        mApp.openDBWritable().getLessonDao().deleteAll();
-        mApp.openDBWritable().getPlaceDao().deleteAll();
-        mApp.openDBWritable().getStudentDao().deleteAll();
-        mApp.openDBWritable().getInstructorDao().deleteAll();
-        mApp.openDBWritable().getLessonTimeDao().deleteAll();
+
+    }
+
+    private void showHideOptionDialog() {
+        final EditText edit = new EditText(this);
+        edit.setText(Constants.HOST);
+
+        AlertDialog.Builder dialog = new AlertDialog.Builder(this);
+        dialog.setTitle("네트워크 설정");
+        dialog.setView(edit);
+        dialog.setPositiveButton("확인", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                Constants.HOST = edit.getText().toString();
+                onResume();
+            }
+        });
+        dialog.show();
     }
 
     @Override
     protected void onResume() {
         super.onResume();
+
+        Retrofit retrofit = new Retrofit.Builder()
+                .baseUrl(Constants.HOST)
+                .addConverterFactory(GsonConverterFactory.create())
+                .build();
+        mWebService = retrofit.create(WebService.class);
 
         // 로딩 배경화면이 그려진 후 로딩과정이 이루어 질 수 있도록
         // 2초의 시간차를 두고 로딩 시작
@@ -128,6 +159,13 @@ public class SplashActivity extends AppCompatActivity implements
             mProgDialog.setProgressStyle(ProgressDialog.STYLE_SPINNER);
             mProgDialog.show();
 
+            // 내부 모든 테이블 초기화 - 재시작 시점에 재구성
+            mApp.openDBWritable().getLessonDao().deleteAll();
+            mApp.openDBWritable().getPlaceDao().deleteAll();
+            mApp.openDBWritable().getStudentDao().deleteAll();
+            mApp.openDBWritable().getInstructorDao().deleteAll();
+            mApp.openDBWritable().getLessonTimeDao().deleteAll();
+
             loadingNextStep(step);
         } else if (LoadingStep.INSTRUCTOR.equals(step)) {
             mProgDialog.setMessage("강사목록 동기화 중");
@@ -150,6 +188,10 @@ public class SplashActivity extends AppCompatActivity implements
                 @Override
                 public void onFailure(Call<List<Instructor>> call, Throwable t) {
                     Log.e(TAG, "강사목록 동기화 실패:" + t.toString());
+                    mProgDialog.dismiss();
+                    Toast.makeText(SplashActivity.this
+                            , "네트워크 상태를 확인하세요."
+                            , Toast.LENGTH_SHORT).show();
                 }
             });
         } else if (LoadingStep.PLACE.equals(step)) {

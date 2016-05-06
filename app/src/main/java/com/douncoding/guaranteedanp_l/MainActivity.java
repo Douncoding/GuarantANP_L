@@ -5,18 +5,21 @@ import android.os.Bundle;
 import android.support.design.widget.AppBarLayout;
 import android.support.design.widget.CollapsingToolbarLayout;
 import android.support.design.widget.FloatingActionButton;
+import android.support.design.widget.NavigationView;
 import android.support.v4.widget.DrawerLayout;
 import android.support.v7.app.ActionBarDrawerToggle;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
+import android.view.MenuItem;
 import android.view.View;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import com.douncoding.dao.Instructor;
 
 public class MainActivity extends AppCompatActivity implements
-    LessonListFragment.OnListener {
+    LessonListFragment.OnListener, NavigationView.OnNavigationItemSelectedListener {
 
     public static final String TAG = MainActivity.class.getSimpleName();
 
@@ -88,6 +91,8 @@ public class MainActivity extends AppCompatActivity implements
         mDrawerLayout.addDrawerListener(mDrawerToggle);
         mDrawerToggle.syncState();
 
+        NavigationView navigationView = (NavigationView) findViewById(R.id.nav_view);
+        navigationView.setNavigationItemSelectedListener(this);
         /**
          * Collasping 생성
          */
@@ -156,5 +161,19 @@ public class MainActivity extends AppCompatActivity implements
         Intent intent = new Intent(this, LessonDetailsActivity.class);
         intent.putExtra("lid", lessonId);
         startActivity(intent);
+    }
+
+    @Override
+    public boolean onNavigationItemSelected(MenuItem item) {
+        int id = item.getItemId();
+
+        if (id == R.id.nav_logout) {
+            mApp.내정보.삭제();
+            Toast.makeText(MainActivity.this
+                    , "로그아웃 : 구현중"
+                    , Toast.LENGTH_SHORT).show();
+        }
+
+        return true;
     }
 }
