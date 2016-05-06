@@ -14,12 +14,26 @@
         android:paddingStart="16dp"
         android:paddingEnd="16dp">
 
-        <TextView
-            android:id="@+id/name_text"
+        <RelativeLayout
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:textAppearance="?android:attr/textAppearanceLarge"
-            android:text="데이터베이스"/>
+            android:layout_height="wrap_content">
+
+            <TextView
+                android:id="@+id/name_text"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textAppearance="?android:attr/textAppearanceLarge"
+                android:text="데이터베이스"/>
+
+            <TextView
+                android:id="@+id/delete_action"
+                android:layout_width="35dp"
+                android:layout_height="35dp"
+                android:paddingStart="5dp"
+                android:layout_alignParentEnd="true"
+                android:background="@drawable/ic_delete_black_24dp"
+                android:backgroundTint="@color/divider"/>
+        </RelativeLayout>
 
         <TextView
             android:id="@+id/subtitle_text"

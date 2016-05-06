@@ -206,7 +206,7 @@ public class AttendanceFragment extends Fragment implements
     private int getTotalDayOfLesson(List<LessonTime> lessonTimes) {
         int totalDay = 0;
 
-        if (lessonTimes.size() == 0) {
+        if (lessonTimes.size() <= 0) {
             Log.w(TAG, "강의시간 목록 비어있음");
             return 0;
         }
@@ -272,9 +272,10 @@ public class AttendanceFragment extends Fragment implements
             xVals.add(mStudents.get(i).getName());
         }
 
-        BarDataSet set;
+        if (xVals.size() == 0)
+            return;
 
-        set = new BarDataSet(yVals, "출석횟수");
+        BarDataSet set = new BarDataSet(yVals, "출석횟수");
 
         ArrayList<IBarDataSet> dataSets = new ArrayList<>();
         dataSets.add(set);
@@ -291,6 +292,9 @@ public class AttendanceFragment extends Fragment implements
     private void pieChartSetData(int attend, int late, int absent, int total) {
         // 입력된 값 이외의 값은 모두 결석으로 강제 처리
         absent += (total - (attend + late + absent));
+
+        if (total == 0)
+            return;
 
         // 일 수를 확률 값으로 전환
         float pAttend, pLate, pAbsent;

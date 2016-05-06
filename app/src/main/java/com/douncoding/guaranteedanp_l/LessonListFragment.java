@@ -14,6 +14,7 @@ import android.view.ViewGroup;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import com.douncoding.dao.*;
 import com.douncoding.dao.LessonTime;
@@ -25,6 +26,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+
+import okhttp3.ResponseBody;
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
 
 
 public class LessonListFragment extends Fragment {
@@ -178,8 +184,6 @@ public class LessonListFragment extends Fragment {
         }.execute();
     }
 
-
-
     private List<Lesson> loadOwnLessons() {
         Instructor own = mApp.내정보.얻기();
 
@@ -191,7 +195,6 @@ public class LessonListFragment extends Fragment {
                 ownLessons.add(lesson);
             }
         }
-
         return ownLessons;
     }
 
@@ -205,16 +208,13 @@ public class LessonListFragment extends Fragment {
         Calendar startDate = Calendar.getInstance();
         Calendar endDate = Calendar.getInstance();
 
-        String[] startHourAndMin = time.getStartTime().split(":");
-        String[] endHourAndMin = time.getEndTime().split(":");
-
         startDate.setTime(time.getStartDate());
         endDate.setTime(time.getEndDate());
 
         // 사이 날짜인지 확인
         if (currentDate.getTimeInMillis() < startDate.getTimeInMillis() ||
                 currentDate.getTimeInMillis() > endDate.getTimeInMillis()) {
-            Log.i(TAG, "포함되지 않는 날짜: " +
+            Log.v(TAG, "포함되지 않는 날짜: " +
                     String.format(Locale.getDefault(), "시작:%d 현재:%d 종료:%d",
                             startDate.getTimeInMillis(),
                             currentDate.getTimeInMillis(),
@@ -224,12 +224,14 @@ public class LessonListFragment extends Fragment {
 
         // 요일이 같은지 확인
         if (currentDate.get(Calendar.DAY_OF_WEEK) != time.getDay()) {
-            Log.i(TAG, "현재 요일:" + currentDate.get(Calendar.DAY_OF_WEEK) +
+            Log.v(TAG, "현재 요일:" + currentDate.get(Calendar.DAY_OF_WEEK) +
                     " 과목 요일:" + time.getDay());
             return false;
         }
         return true;
     }
+
+
 
     class LessonListAdapter extends RecyclerView.Adapter<LessonListAdapter.ViewHolder> {
 
@@ -305,6 +307,7 @@ public class LessonListFragment extends Fragment {
             EditText mPersonnelText;
             TextView mATCountText;
             TextView mASCountText;
+            TextView mDeleteAction;
             LinearLayout mContainerView1;
             LinearLayout mContainerView2;
 
@@ -321,14 +324,40 @@ public class LessonListFragment extends Fragment {
                 mContainerView1 = (LinearLayout)itemView.findViewById(R.id.tody_container);
                 mContainerView2 = (LinearLayout)itemView.findViewById(R.id.not_toady_container);
 
+                mDeleteAction = (TextView)itemView.findViewById(R.id.delete_action);
+                mDeleteAction.setOnClickListener(this);
+
                 itemView.setOnClickListener(this);
             }
 
             @Override
             public void onClick(View v) {
-                if (mListener != null) {
-                    int lessonId = mDataset.get(getPosition()).getId().intValue();
-                    mListener.onNavigateToDetailView(lessonId);
+                final int lessonId = mDataset.get(getPosition()).getId().intValue();
+
+                if (v.getId() == R.id.delete_action) {
+                    mWebService.deleteLesson(lessonId).enqueue(new Callback<ResponseBody>() {
+                        @Override
+                        public void onResponse(Call<ResponseBody> call, Response<ResponseBody> response) {
+                            Log.d(TAG, "삭제결과:" + response.code());
+                            mApp.openDBWritable().getLessonDao().deleteByKey((long)lessonId);
+
+                            mDataset.remove(getPosition());
+                            notifyDataSetChanged();
+
+                            Toast.makeText(getContext(),
+                                    "삭제완료",
+                                    Toast.LENGTH_SHORT).show();
+                        }
+
+                        @Override
+                        public void onFailure(Call<ResponseBody> call, Throwable t) {
+
+                        }
+                    });
+                } else {
+                    if (mListener != null) {
+                        mListener.onNavigateToDetailView(lessonId);
+                    }
                 }
             }
         }

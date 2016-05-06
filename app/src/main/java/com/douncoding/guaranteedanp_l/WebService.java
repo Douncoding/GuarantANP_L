@@ -13,8 +13,10 @@ import java.util.List;
 import java.util.Map;
 
 import okhttp3.RequestBody;
+import okhttp3.ResponseBody;
 import retrofit2.Call;
 import retrofit2.http.Body;
+import retrofit2.http.DELETE;
 import retrofit2.http.FieldMap;
 import retrofit2.http.FormUrlEncoded;
 import retrofit2.http.GET;
@@ -68,17 +70,25 @@ public interface WebService {
             @Query("password") String password);
 
     /**
-     *
-     * @param lesson
-     * @return
+     * 강의생성
+     * @param lesson 강의정보
+     * @return 생성된 강의 인슽천스
      */
     @POST("/lessons/new")
     Call<Lesson> uploadLesson(@Body Lesson lesson);
 
     /**
+     * 강의삭제
+     * @param lessonId
+     * @return
+     */
+    @DELETE("/lessons/{id}")
+    Call<ResponseBody> deleteLesson(@Path("id") int lessonId);
+
+    /**
      * 강의시간 업로드
      */
-    @POST("/lessons/{lessonName}/times")
+    @POST("/lessons/times/{lessonName}")
     Call<List<LessonTime>> uploadLessonTime(
             @Body List<LessonTime> lessonTimes,
             @Path("lessonName") String lessonName);
