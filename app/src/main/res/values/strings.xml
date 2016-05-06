@@ -1,3 +1,25 @@
 <resources>
-    <string name="app_name">GuaranteedANP_L</string>
+    <string name="app_name">보장받는출결\n(강사용)</string>
+    <string name="title_activity_main">MainActivity</string>
+
+    <string name="drawer_open">Open navigation drawer</string>
+    <string name="drawer_close">Close navigation drawer</string>
+
+
+
+    <string name="week_monday">월</string>
+    <string name="week_tuesday">화</string>
+    <string name="week_wednesday">수</string>
+    <string name="week_thursday">목</string>
+    <string name="week_friday">금</string>
+    <string name="week_saturday">토</string>
+    <string name="week_sunday">일</string>
+    <string name="lesson_input_room">강의실</string>
+    <string name="lesson_input_name">명칭</string>
+    <string name="lesson_input_desc">설명</string>
+    <string name="lesson_input_personnel">총원</string>
+    <string name="lesson_create_basic_label">기본정보를 입력하세요</string>
+    <string name="lesson_create_date_label">개강일자와 종강일자를 선택하세요</string>
+    <string name="lesson_create_week_label">수업시간을 선택하세요</string>
+    <string name="lesson_create_submit">강의 개설</string>"
 </resources>
