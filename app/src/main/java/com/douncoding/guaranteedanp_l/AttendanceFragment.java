@@ -2,9 +2,6 @@ package com.douncoding.guaranteedanp_l;
 
 import android.content.Context;
 import android.graphics.Color;
-import android.graphics.PointF;
-import android.graphics.RectF;
-import android.os.AsyncTask;
 import android.os.Bundle;
 import android.support.annotation.Nullable;
 import android.support.v4.app.Fragment;
@@ -25,50 +22,38 @@ import com.github.mikephil.charting.data.Entry;
 import com.github.mikephil.charting.data.PieData;
 import com.github.mikephil.charting.data.PieDataSet;
 import com.github.mikephil.charting.formatter.PercentFormatter;
-import com.github.mikephil.charting.highlight.Highlight;
 import com.github.mikephil.charting.interfaces.datasets.IBarDataSet;
-import com.github.mikephil.charting.listener.OnChartValueSelectedListener;
 
-import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Calendar;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 
-import com.douncoding.dao.LessonTime;
 import com.github.mikephil.charting.utils.ColorTemplate;
-
-import retrofit2.Retrofit;
-import retrofit2.converter.gson.GsonConverterFactory;
 
 /**
  * 학생 별 출석 일 수 (Horizontal-BarChart)
  * 전체 출석비율 (PieChart)
  */
-public class AttendanceFragment extends Fragment implements
-        OnChartValueSelectedListener {
+public class AttendanceFragment extends Fragment {
     public static final String TAG = AttendanceFragment.class.getSimpleName();
 
     public static final String EXTRA_PARAM1 = "param1";
 
     public AttendanceFragment() {}
 
+    /**
+     * 주요 자원
+     */
     AppContext mApp;
     WebService mWebService;
-
-    private Lesson mLesson;
-    private List<Student> mStudents;
-    private List<LessonTime> mLessonTime;
-    private HashMap<Long, List<Attendance>> mAttendanceMap = new HashMap<>();
+    RollBookInteractor mRollBookInteractor;
+    Lesson mLesson;
 
     /**
      * UI
      */
     HorizontalBarChart mHorizontalChart;
     PieChart mPieChart;
-
     Button mHorizonSelView;
     Button mPieSelView;
 
@@ -94,16 +79,19 @@ public class AttendanceFragment extends Fragment implements
         if (getArguments() != null) {
             int lessonId = getArguments().getInt(EXTRA_PARAM1);
             mLesson = mApp.openDBReadable().getLessonDao().load((long)lessonId);
-            mLessonTime = mLesson.getLessonTimeList();
-            Log.i(TAG, "강의정보 읽기 완료: 식별자:" + mLesson.getId());
         }
 
-        Retrofit retrofit = new Retrofit.Builder()
-                .baseUrl(Constants.HOST)
-                .addConverterFactory(GsonConverterFactory.create())
-                .build();
+        mWebService = mApp.getWebServiceInstance();
 
-        mWebService = retrofit.create(WebService.class);
+        mRollBookInteractor = new RollBookInteractor(mApp, mLesson);
+        mRollBookInteractor.setOnCallback(new RollBookInteractor.OnCallback() {
+            @Override
+            public void onReload(Lesson aLesson) {
+                horizontalChartSetData();
+                mHorizontalChart.invalidate();
+                mHorizontalChart.animateY(3000);
+            }
+        });
     }
 
     @Nullable
@@ -132,25 +120,15 @@ public class AttendanceFragment extends Fragment implements
                 mHorizontalChart.setVisibility(View.GONE);
                 mPieChart.setVisibility(View.VISIBLE);
 
-                // 수업일 수
-                int day = getTotalDayOfLesson(mLesson.getLessonTimeList());
-                // 학생 수 * 수업일 수
-                int totalDay = day * mStudents.size();
-                // 전체 출석일 수
-                int attendDay = 0;
-
-                for (int i = 0; i < mStudents.size(); i++) {
-                    attendDay += getAttendanceDay(i);
-                }
-
-                pieChartSetData(attendDay, 0, 0, totalDay);
+                pieChartSetData(
+                        mRollBookInteractor.getAllTimesState(RollBookInteractor.AttendState.ATTEND),
+                        mRollBookInteractor.getAllTimesState(RollBookInteractor.AttendState.LATE),
+                        mRollBookInteractor.getAllTimesState(RollBookInteractor.AttendState.ABSENT),
+                        mRollBookInteractor.getTotalDays());
                 mPieChart.invalidate();
                 mPieChart.animateY(3000, Easing.EasingOption.EaseInOutQuad);
             }
         });
-
-        mHorizontalChart.setOnChartValueSelectedListener(this);
-        mHorizontalChart.animateY(3000);
         return view;
     }
 
@@ -162,102 +140,6 @@ public class AttendanceFragment extends Fragment implements
     @Override
     public void onResume() {
         super.onResume();
-
-        loadData();
-    }
-
-    private void loadData() {
-        new AsyncTask<Void, String, Void>() {
-            @Override
-            protected Void doInBackground(Void... params) {
-                int lessonId = mLesson.getId().intValue();
-
-                try {
-                    mStudents = mWebService.getStudentsOfLesson(lessonId).execute().body();
-
-                    for (Student student : mStudents) {
-                        int studentId = student.getId().intValue();
-                        List<Attendance> attendances = mWebService.getAttendancesOfStudent(
-                                studentId, lessonId).execute().body();
-
-                        mAttendanceMap.put(student.getId(), attendances);
-                    }
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-
-                return null;
-            }
-
-            @Override
-            protected void onPostExecute(Void aVoid) {
-                super.onPostExecute(aVoid);
-                horizontalChartSetData();
-            }
-        }.execute();
-    }
-
-    /**
-     * 전체 수업 일 수를 구한다. 시작일 부터 종요일까지 주기로 선정된
-     * 요일과 일치하는 개수를 의미한다.
-     * @param lessonTimes 강의의 강의시간
-     * @return 총 수업 일 수
-     */
-    private int getTotalDayOfLesson(List<LessonTime> lessonTimes) {
-        int totalDay = 0;
-
-        if (lessonTimes.size() <= 0) {
-            Log.w(TAG, "강의시간 목록 비어있음");
-            return 0;
-        }
-
-        // 총 일수 계산을 위한 대표
-        LessonTime time = lessonTimes.get(0);
-
-        Calendar sc = Calendar.getInstance();
-        Calendar ec = Calendar.getInstance();
-        sc.setTime(time.getStartDate());
-        ec.setTime(time.getEndDate());
-
-        // 시작일 ~ 종료일 요일 표현
-        while (sc.getTimeInMillis() <= ec.getTimeInMillis()) {
-            sc.add(Calendar.DATE, 1);
-            for (LessonTime day : lessonTimes) {
-                if (sc.get(Calendar.DAY_OF_WEEK) == day.getDay()) {
-                    totalDay++;
-                }
-            }
-        }
-        return totalDay;
-    }
-
-    /**
-     * 학생의 출석 일 수 추출
-     * @param pos 메모리상의 학생 리스트 중 구하고자 하는 학생의 위치
-     * @return 출석일수
-     */
-    private int getAttendanceDay(int pos) {
-        int attendDay = 0;
-
-        Student student = mStudents.get(pos);
-
-        List<Attendance> list = mAttendanceMap.get(student.getId());
-
-        if (list == null || list.size() == 0)
-            return 0;
-
-        // 지각도 출석으로 인정한다.
-        for (Attendance item : list) {
-            switch (item.getState()) {
-                case 1: // 출석
-                    attendDay++;
-                    break;
-                case 2: // 지각
-                    attendDay++;
-                    break;
-            }
-        }
-        return attendDay;
     }
 
     /**
@@ -267,9 +149,17 @@ public class AttendanceFragment extends Fragment implements
         ArrayList<BarEntry> yVals = new ArrayList<>();
         ArrayList<String> xVals = new ArrayList<>();
 
-        for (int i = 0; i < mStudents.size(); i++) {
-            yVals.add(new BarEntry((float) getAttendanceDay(i), i));
-            xVals.add(mStudents.get(i).getName());
+        List<Student> students = mRollBookInteractor.getStudents();
+
+        for (int i = 0; i < students.size(); i++) {
+            int count
+                    = mRollBookInteractor.getTimesState(students.get(i),
+                    RollBookInteractor.AttendState.ATTEND)
+                    + mRollBookInteractor.getTimesState(students.get(i),
+                    RollBookInteractor.AttendState.LATE);
+
+            yVals.add(new BarEntry((float)count, i));
+            xVals.add(students.get(i).getName());
         }
 
         if (xVals.size() == 0)
@@ -287,7 +177,6 @@ public class AttendanceFragment extends Fragment implements
 
     /**
      * 전체 학생의 출석상태를 출력
-     * 0:출석 1:지각 2:결석
      */
     private void pieChartSetData(int attend, int late, int absent, int total) {
         // 입력된 값 이외의 값은 모두 결석으로 강제 처리
@@ -296,12 +185,18 @@ public class AttendanceFragment extends Fragment implements
         if (total == 0)
             return;
 
+        Log.i(TAG, String.format(Locale.getDefault(),"출석:%d 지각:%d 결석:%d 종합:%d (일)",
+                attend, late, absent, total));
+
         // 일 수를 확률 값으로 전환
         float pAttend, pLate, pAbsent;
 
         pAttend = ((float)attend/(float)total) * 100;
         pLate = ((float)late/(float)total) * 100;
         pAbsent = ((float)absent/(float)total) * 100;
+
+        Log.i(TAG, String.format(Locale.getDefault(),"출석:%f 지각:%f 결석:%f (확)",
+                pAttend, pLate, pAbsent));
 
         ArrayList<Entry> yVals = new ArrayList<>();
         yVals.add(new Entry(pAttend, 0));
@@ -341,24 +236,6 @@ public class AttendanceFragment extends Fragment implements
         data.setValueTextSize(11f);
         data.setValueTextColor(Color.WHITE);
         mPieChart.setData(data);
-    }
-
-    @Override
-    public void onValueSelected(Entry e, int dataSetIndex, Highlight h) {
-        if (e == null)
-            return;
-
-        RectF bounds = mHorizontalChart.getBarBounds((BarEntry) e);
-        PointF position = mHorizontalChart.getPosition(e, mHorizontalChart.getData().getDataSetByIndex(dataSetIndex)
-                .getAxisDependency());
-
-        Log.i("bounds", bounds.toString());
-        Log.i("position", position.toString());
-    }
-
-    @Override
-    public void onNothingSelected() {
-
     }
 }
 

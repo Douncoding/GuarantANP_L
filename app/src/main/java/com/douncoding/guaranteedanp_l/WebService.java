@@ -56,7 +56,7 @@ public interface WebService {
      * @return 강의목록
      */
     @GET("/lessons")
-    Call<List<Lesson>> loadAllLessons();
+    Call<List<Lesson>> getAllLessons();
 
     /**
      * 학생 로그인

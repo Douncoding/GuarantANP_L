@@ -6,10 +6,11 @@ import android.content.SharedPreferences;
 import android.database.sqlite.SQLiteDatabase;
 import android.util.Log;
 
-import com.douncoding.dao.DaoMaster;
-import com.douncoding.dao.DaoSession;
-import com.douncoding.dao.Instructor;
-import com.douncoding.dao.Student;
+import com.douncoding.dao.*;
+import com.douncoding.dao.LessonTime;
+
+import java.util.Calendar;
+import java.util.List;
 
 import retrofit2.Retrofit;
 import retrofit2.converter.gson.GsonConverterFactory;
@@ -118,6 +119,4 @@ public class AppContext extends Application {
             Log.i(TAG, "내정보 삭제:");
         }
     }
-
-
 }

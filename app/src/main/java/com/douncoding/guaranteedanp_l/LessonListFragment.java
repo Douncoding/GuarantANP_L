@@ -1,13 +1,11 @@
 package com.douncoding.guaranteedanp_l;
 
 import android.content.Context;
-import android.os.AsyncTask;
 import android.os.Bundle;
 import android.support.v4.app.Fragment;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.util.Log;
-import android.util.StringBuilderPrinter;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -19,37 +17,33 @@ import android.widget.Toast;
 import com.douncoding.dao.*;
 import com.douncoding.dao.LessonTime;
 
-import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Calendar;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
-
-import okhttp3.ResponseBody;
-import retrofit2.Call;
-import retrofit2.Callback;
-import retrofit2.Response;
+import java.util.Objects;
 
 
 public class LessonListFragment extends Fragment {
     public static final String TAG = LessonListFragment.class.getSimpleName();
 
-    private OnListener mListener;
+    // 최상위 자원
+    AppContext mApp;
+    // 데이터베이스 처리
+    PrincipalInteractor mPrincipal;
+    // 강의별 출석부 (현황)
+    HashMap<Lesson, RollBookInteractor> mRollBookPerLesson;
+    // 로딩이 완료된 출석부의 개수
+    int mLoadRollBookCount = 0;
 
+    // UI
     RecyclerView mLessonListView;
     LinearLayoutManager mLayoutManager;
     LessonListAdapter mAdapter;
-
-    // 오늘의 강의목록
-    //ArrayList<Lesson> mTodayLessons = new ArrayList<>();
-    HashMap<Lesson, Integer> mTodayLessons;
-
-    AppContext mApp;
-    WebService mWebService;
-
-    PlaceDao mPlaceDao;
 
     public LessonListFragment() { }
 
@@ -60,15 +54,41 @@ public class LessonListFragment extends Fragment {
         return fragment;
     }
 
+    OnListener onListener;
+    public interface OnListener {
+        void onNavigateToDetailView(int lessonId);
+    }
+
+    @Override
+    public void onAttach(Context context) {
+        super.onAttach(context);
+        if (context instanceof OnListener) {
+            onListener = (OnListener) context;
+        }
+
+        mApp = (AppContext)context.getApplicationContext();
+
+        // 강의 처리
+        mPrincipal = new PrincipalInteractor(mApp);
+
+        // 강의별 출석 처리
+        mRollBookPerLesson = new HashMap<>();
+
+        // 출석부 생성
+        load();
+    }
+
+    @Override
+    public void onDetach() {
+        super.onDetach();
+        onListener = null;
+        mRollBookPerLesson = null;
+        mPrincipal = null;
+    }
+
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
-        mPlaceDao = mApp.openDBReadable().getPlaceDao();
-
-        mWebService = mApp.getWebServiceInstance();
-
-        mTodayLessons = new HashMap<>();
     }
 
     @Override
@@ -85,157 +105,56 @@ public class LessonListFragment extends Fragment {
         return view;
     }
 
-    @Override
-    public void onAttach(Context context) {
-        super.onAttach(context);
-        if (context instanceof OnListener) {
-            mListener = (OnListener) context;
-        } else {
-            throw new RuntimeException(context.toString() + " must implement ");
+    /**
+     * 초기화 로직
+     * 화면구성와 데이터 로딩이 완료된 이후 출력할 결과
+     */
+    private void onInit() {
+        // 오늘의 강의 먼저 출력
+        for (Map.Entry<Lesson, RollBookInteractor> entry : mRollBookPerLesson.entrySet()) {
+            if (entry.getValue() != null)
+                mAdapter.addItem(entry.getKey());
         }
 
-        mApp = (AppContext)context.getApplicationContext();
-        if (mApp == null) {
-            throw new RuntimeException("ApplicationContext is null..");
+        for (Map.Entry<Lesson, RollBookInteractor> entry : mRollBookPerLesson.entrySet()) {
+            if (entry.getValue() == null)
+                mAdapter.addItem(entry.getKey());
         }
-    }
-
-    @Override
-    public void onDetach() {
-        super.onDetach();
-        mListener = null;
-    }
-
-    public interface OnListener {
-        void onNavigateToDetailView(int lessonId);
-    }
-
-    @Override
-    public void onResume() {
-        super.onResume();
-
-        List<Lesson> lessons = loadOwnLessons();
-        // 오늘의 강의목록 구성
-        for (Lesson lesson : lessons) {
-            for (LessonTime time: lesson.getLessonTimeList()) {
-                if (isValidateLessonTime(time)) {
-                    //mTodayLessons.add(lesson);
-                    mTodayLessons.put(lesson, 0);
-                }
-            }
-        }
-
-        loadData();
-
-        mAdapter.addItem(lessons);
-    }
-
-    private void loadData() {
-        new AsyncTask<Void, String, Void>() {
-            @Override
-            protected Void doInBackground(Void... params) {
-                for (Map.Entry<Lesson, Integer> entry : mTodayLessons.entrySet()) {
-                    Lesson lesson = entry.getKey();
-
-                    int lessonId = lesson.getId().intValue();
-                    int todayAttendCount = 0;
-                    try {
-                        // 수강생 목록 구함
-                        List<Student> mStudents =
-                                mWebService.getStudentsOfLesson(lessonId).execute().body();
-
-                        // 수강생별 출석부를 구함
-                        for (Student student : mStudents) {
-                            int studentId = student.getId().intValue();
-
-                            // 출석현황
-                            List<Attendance> attendances = mWebService.getAttendancesOfStudent(
-                                    studentId, lessonId).execute().body();
-
-                            // 오늘 날짜에 해당하는 출석기록만 구함
-                            for (Attendance item: attendances) {
-                                Calendar tc = Calendar.getInstance();
-                                Calendar ec = Calendar.getInstance();
-                                ec.setTime(item.getEnterTime());
-
-                                if (tc.get(Calendar.DAY_OF_MONTH) == ec.get(Calendar.DAY_OF_MONTH)) {
-                                    // 지각 또는 출석
-                                    if (item.getState() != 0) {
-                                        todayAttendCount++;
-                                    }
-                                }
-                            }
-                        } // for
-
-                        Log.i(TAG, lesson.getName() +" 출석인원:" + todayAttendCount);
-                        mTodayLessons.put(lesson, todayAttendCount);
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-                } // for
-                return null;
-            }
-
-            @Override
-            protected void onPostExecute(Void aVoid) {
-                super.onPostExecute(aVoid);
-                mAdapter.notifyDataSetChanged();
-            }
-        }.execute();
-    }
-
-    private List<Lesson> loadOwnLessons() {
-        Instructor own = mApp.내정보.얻기();
-
-        List<Lesson> ownLessons = new ArrayList<>();
-        List<Lesson> allLessons = mApp.openDBReadable().getLessonDao().loadAll();
-
-        for (Lesson lesson : allLessons) {
-            if (lesson.getIid() == own.getId()) {
-                ownLessons.add(lesson);
-            }
-        }
-        return ownLessons;
     }
 
     /**
-     * 오늘 강의 강의 인지확인
-     * @param time 확인을 원하는 강의시간
-     * @return 포함여부
+     * 출석부 동기화
      */
-    private boolean isValidateLessonTime(com.douncoding.dao.LessonTime time) {
-        Calendar currentDate = Calendar.getInstance();
-        Calendar startDate = Calendar.getInstance();
-        Calendar endDate = Calendar.getInstance();
+    private void load() {
+        // 내 강의목록
+        final List<Lesson> ownLessons = mPrincipal.getOwnLessonList();
+        // 오늘 내 강의목록
+        final List<Lesson> todayLessons = mPrincipal.getTodayLessonList(ownLessons);
 
-        startDate.setTime(time.getStartDate());
-        endDate.setTime(time.getEndDate());
+        for (Lesson lesson : ownLessons) {
+            if (todayLessons.contains(lesson)) {
+                RollBookInteractor rollBook = new RollBookInteractor(mApp, lesson);
+                rollBook.setOnCallback(new RollBookInteractor.OnCallback() {
+                    @Override
+                    public void onReload(Lesson aLesson) {
+                        mLoadRollBookCount++;
+                        if (mLoadRollBookCount == todayLessons.size()) {
+                            onInit();
+                        }
+                    }
+                });
+                // 오늘강의 목록만 출석부를 생성
+                mRollBookPerLesson.put(lesson, rollBook);
+            } else {
+                mRollBookPerLesson.put(lesson, null);
+            }
 
-        // 사이 날짜인지 확인
-        if (currentDate.getTimeInMillis() < startDate.getTimeInMillis() ||
-                currentDate.getTimeInMillis() > endDate.getTimeInMillis()) {
-            Log.v(TAG, "포함되지 않는 날짜: " +
-                    String.format(Locale.getDefault(), "시작:%d 현재:%d 종료:%d",
-                            startDate.getTimeInMillis(),
-                            currentDate.getTimeInMillis(),
-                            endDate.getTimeInMillis()));
-            return false;
+            Log.d(TAG, lesson.getName());
         }
-
-        // 요일이 같은지 확인
-        if (currentDate.get(Calendar.DAY_OF_WEEK) != time.getDay()) {
-            Log.v(TAG, "현재 요일:" + currentDate.get(Calendar.DAY_OF_WEEK) +
-                    " 과목 요일:" + time.getDay());
-            return false;
-        }
-        return true;
     }
 
-
-
     class LessonListAdapter extends RecyclerView.Adapter<LessonListAdapter.ViewHolder> {
-
-        ArrayList<Lesson> mDataset = new ArrayList<>();
+        ArrayList<Lesson> mDataSet = new ArrayList<>();
 
         @Override
         public ViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
@@ -247,29 +166,7 @@ public class LessonListFragment extends Fragment {
 
         @Override
         public void onBindViewHolder(ViewHolder holder, int position) {
-            Lesson item = mDataset.get(position);
-
-            boolean todayLesson = false;
-            int attendCount = 0;
-
-            //for (Lesson lesson : mTodayLessons) {
-            for (Map.Entry<Lesson, Integer> entry : mTodayLessons.entrySet()) {
-                Lesson lesson = entry.getKey();
-                attendCount = entry.getValue();
-                if (lesson.getId().equals(item.getId())) {
-                    todayLesson = true;
-                    break;
-                }
-            }
-
-            // 오늘 강의의 경우는 출석화면 현시
-            if (todayLesson) {
-                holder.mContainerView1.setVisibility(View.VISIBLE);
-                holder.mContainerView2.setVisibility(View.GONE);
-            } else {
-                holder.mContainerView2.setVisibility(View.VISIBLE);
-                holder.mContainerView1.setVisibility(View.GONE);
-            }
+            Lesson item = mDataSet.get(position);
 
             StringBuilder builder = new StringBuilder();
             for (LessonTime time : item.getLessonTimeList()) {
@@ -279,22 +176,39 @@ public class LessonListFragment extends Fragment {
 
             // 기본정보
             holder.mNameText.setText(item.getName());
-            holder.mPersonnelText.setText(String.valueOf(item.getPersonnel()));
-            holder.mRoomText.setText(mPlaceDao.load(item.getPid()).getName());
+            holder.mRoomText.setText(mPrincipal.getNameLessonRoom(item.getPid()));
             holder.mSubText.setText(builder.toString());
+            holder.mPersonnelText.setText(String.valueOf(item.getPersonnel()));
 
-            // 출석정보
-            holder.mASCountText.setText(String.valueOf(item.getPersonnel() - attendCount));
-            holder.mATCountText.setText(String.valueOf(attendCount));
+            // 오늘 강의의 경우는 출석화면 현시
+            if (mRollBookPerLesson.get(item) != null) {
+                holder.mContainerView1.setVisibility(View.VISIBLE);
+                holder.mContainerView2.setVisibility(View.GONE);
+
+                // 출석정보 (지각 + 출석)
+                List<Student> students = mRollBookPerLesson.get(item).getStudents();
+                if (students != null) {
+                    int total = students.size();
+                    int attendCount
+                            = mRollBookPerLesson.get(item).getTodayTimesState(RollBookInteractor.AttendState.ATTEND)
+                            + mRollBookPerLesson.get(item).getTodayTimesState(RollBookInteractor.AttendState.LATE);
+                    holder.mASCountText.setText(String.valueOf(total - attendCount));
+                    holder.mATCountText.setText(String.valueOf(attendCount));
+                    holder.mPersonnelText.setText(String.valueOf(total));
+                }
+            } else {
+                holder.mContainerView2.setVisibility(View.VISIBLE);
+                holder.mContainerView1.setVisibility(View.GONE);
+            }
         }
 
         @Override
         public int getItemCount() {
-            return mDataset.size();
+            return mDataSet.size();
         }
 
-        public void addItem(List<Lesson> lessons) {
-            mDataset.addAll(lessons);
+        public void addItem(Lesson lessons) {
+            mDataSet.add(lessons);
             notifyDataSetChanged();
         }
 
@@ -332,31 +246,19 @@ public class LessonListFragment extends Fragment {
 
             @Override
             public void onClick(View v) {
-                final int lessonId = mDataset.get(getPosition()).getId().intValue();
+                final int lessonId = mDataSet.get(getPosition()).getId().intValue();
 
                 if (v.getId() == R.id.delete_action) {
-                    mWebService.deleteLesson(lessonId).enqueue(new Callback<ResponseBody>() {
-                        @Override
-                        public void onResponse(Call<ResponseBody> call, Response<ResponseBody> response) {
-                            Log.d(TAG, "삭제결과:" + response.code());
-                            mApp.openDBWritable().getLessonDao().deleteByKey((long)lessonId);
+                    mPrincipal.deleteLesson(lessonId);
+                    mDataSet.remove(getPosition());
+                    notifyDataSetChanged();
 
-                            mDataset.remove(getPosition());
-                            notifyDataSetChanged();
-
-                            Toast.makeText(getContext(),
-                                    "삭제완료",
-                                    Toast.LENGTH_SHORT).show();
-                        }
-
-                        @Override
-                        public void onFailure(Call<ResponseBody> call, Throwable t) {
-
-                        }
-                    });
+                    Toast.makeText(getContext(),
+                            "삭제완료",
+                            Toast.LENGTH_SHORT).show();
                 } else {
-                    if (mListener != null) {
-                        mListener.onNavigateToDetailView(lessonId);
+                    if (onListener != null) {
+                        onListener.onNavigateToDetailView(lessonId);
                     }
                 }
             }
