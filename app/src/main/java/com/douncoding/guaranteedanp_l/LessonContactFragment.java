@@ -93,30 +93,35 @@ public class LessonContactFragment extends Fragment {
         mContactListView.addItemDecoration(new DividerItemDecoration(getContext()));
         mContactListView.setAdapter(mAdapter);
 
+        init();
+
         return view;
     }
 
     @Override
     public void onResume() {
         super.onResume();
+    }
 
-        if (mLesson != null) {
-            mWebService.getStudentsOfLesson(mLesson.getId().intValue()).enqueue(new Callback<List<Student>>() {
-                @Override
-                public void onResponse(Call<List<Student>> call, Response<List<Student>> response) {
-                    if (response.body() != null) {
-                        mAdapter.addItem(response.body());
-                    } else {
-                        Log.w(TAG, "수강생이 없음");
-                    }
+    private void init() {
+        if (mLesson == null)
+            return;
+
+        mWebService.getStudentsOfLesson(mLesson.getId().intValue()).enqueue(new Callback<List<Student>>() {
+            @Override
+            public void onResponse(Call<List<Student>> call, Response<List<Student>> response) {
+                if (response.body() != null) {
+                    mAdapter.addItem(response.body());
+                } else {
+                    Log.w(TAG, "수강생이 없음");
                 }
+            }
 
-                @Override
-                public void onFailure(Call<List<Student>> call, Throwable t) {
+            @Override
+            public void onFailure(Call<List<Student>> call, Throwable t) {
 
-                }
-            });
-        }
+            }
+        });
     }
 
     class ContactsAdapter extends RecyclerView.Adapter<ContactsAdapter.ViewHolder> {

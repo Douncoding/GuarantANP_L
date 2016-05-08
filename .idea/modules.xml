@@ -3,10 +3,7 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/GuaranteedANP_L.iml" filepath="$PROJECT_DIR$/GuaranteedANP_L.iml" />
-      <module fileurl="file://$PROJECT_DIR$/GuaranteedANP_L.iml" filepath="$PROJECT_DIR$/GuaranteedANP_L.iml" />
       <module fileurl="file://$PROJECT_DIR$/app/app.iml" filepath="$PROJECT_DIR$/app/app.iml" />
-      <module fileurl="file://$PROJECT_DIR$/app/app.iml" filepath="$PROJECT_DIR$/app/app.iml" />
-      <module fileurl="file://$PROJECT_DIR$/greendao-gen/greendao-gen.iml" filepath="$PROJECT_DIR$/greendao-gen/greendao-gen.iml" />
       <module fileurl="file://$PROJECT_DIR$/greendao-gen/greendao-gen.iml" filepath="$PROJECT_DIR$/greendao-gen/greendao-gen.iml" />
     </modules>
   </component>

@@ -1,35 +1,16 @@
 package com.douncoding.guaranteedanp_l;
 
 import android.content.DialogInterface;
-import android.os.AsyncTask;
-import android.os.Handler;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 
 import android.app.ProgressDialog;
 import android.content.Intent;
-import android.util.Log;
 import android.view.View;
 import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
-
-import com.douncoding.dao.Instructor;
-import com.douncoding.dao.Lesson;
-import com.douncoding.dao.Place;
-import com.douncoding.dao.LessonTime;
-
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
-
-import retrofit2.Call;
-import retrofit2.Callback;
-import retrofit2.Response;
-import retrofit2.Retrofit;
-import retrofit2.converter.gson.GsonConverterFactory;
 
 /**
  * 로그인과 서버 데이터베이스 동기화 과정을 처리 하는 액티비티
